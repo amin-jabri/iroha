@@ -170,14 +170,13 @@ namespace shared_model {
 
       Transaction build() {
         static_assert(S == (1 << TOTAL) - 1, "Required fields are not set");
-        Transaction validate_tx(transaction_);
 
         auto answer = stateless_validator_.validate(
             detail::make_polymorphic<Transaction>(transaction_));
         if (answer.hasErrors()) {
           throw std::invalid_argument(answer.reason());
         }
-        return Transaction(transaction_);
+        return Transaction(iroha::protocol::Transaction(transaction_));
       }
 
      private:
