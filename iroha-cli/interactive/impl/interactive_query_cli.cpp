@@ -17,7 +17,6 @@
 
 #include "interactive/interactive_query_cli.hpp"
 
-#include <boost/lexical_cast.hpp>
 #include <fstream>
 #include "client.hpp"
 #include "crypto/crypto.hpp"
@@ -28,10 +27,8 @@
 #include "model/converters/json_query_factory.hpp"
 #include "model/queries/get_asset_info.hpp"
 #include "model/queries/get_roles.hpp"
-#include "types.hpp"
 
 using namespace iroha::model;
-using iroha::operator|;
 
 namespace iroha_cli {
   namespace interactive {
@@ -40,7 +37,6 @@ namespace iroha_cli {
       description_map_ = {
           {GET_ACC, "Get Account Information"},
           {GET_ACC_AST, "Get Account's Assets"},
-          {GET_ACC_TX, "Get Account's Transactions"},
           {GET_ACC_SIGN, "Get Account's Signatories"},
           {GET_ROLES, "Get all current roles in the system"},
           {GET_AST_INFO, "Get information about asset"},
@@ -50,14 +46,11 @@ namespace iroha_cli {
 
       const auto acc_id = "Requested account Id";
       const auto ast_id = "Requested asset Id";
-      const auto pager_tx_hash = "Requested pager tx hash";
-      const auto pager_limit = "Requested pager limit";
       const auto role_id = "Requested role name";
 
       query_params_descriptions_ = {
           {GET_ACC, {acc_id}},
           {GET_ACC_AST, {acc_id, ast_id}},
-          {GET_ACC_TX, {acc_id, pager_tx_hash, pager_limit}},
           {GET_ACC_SIGN, {acc_id}},
           {GET_ROLES, {}},
           {GET_AST_INFO, {ast_id}},
@@ -68,7 +61,6 @@ namespace iroha_cli {
       query_handlers_ = {
           {GET_ACC, &InteractiveQueryCli::parseGetAccount},
           {GET_ACC_AST, &InteractiveQueryCli::parseGetAccountAssets},
-          {GET_ACC_TX, &InteractiveQueryCli::parseGetAccountTransactions},
           {GET_ACC_SIGN, &InteractiveQueryCli::parseGetSignatories},
           {GET_ROLE_PERM, &InteractiveQueryCli::parseGetRolePermissions},
           {GET_ROLES, &InteractiveQueryCli::parseGetRoles},
@@ -162,51 +154,6 @@ namespace iroha_cli {
       auto asset_id = params[1];
       return generator_.generateGetAccountAssets(
           local_time_, creator_, counter_, account_id, asset_id);
-    }
-
-    nonstd::optional<iroha::model::Pager> InteractiveQueryCli::parsePager(
-        const std::string& encoded_tx_hash, const std::string& limit_str) {
-      return nonstd::make_optional<iroha::model::Pager>()
-        | [&encoded_tx_hash](iroha::model::Pager pager)
-            -> nonstd::optional<iroha::model::Pager> {
-            /**
-             * Use '-' as the argument of tx_hash to specify that
-             * the hash is empty because interactive cli splits
-             * arguments by space.
-             */
-            const auto PAGER_TX_HASH_EMPTY = "-";
-            if (encoded_tx_hash == PAGER_TX_HASH_EMPTY) {
-              pager.tx_hash.fill(0);
-            } else {
-              const auto decoded_hash =
-                  iroha::hexstringToBytestring(encoded_tx_hash);
-              if (not decoded_hash) {
-                return nonstd::nullopt;
-              }
-              pager.tx_hash = iroha::hash256_t::from_string(*decoded_hash);
-            }
-            return pager;
-          }
-        | [&limit_str](auto pager)
-            -> nonstd::optional<iroha::model::Pager> {
-          try {
-            pager.limit = boost::lexical_cast<decltype(pager.limit)>(limit_str);
-          } catch (...) {
-            return nonstd::nullopt;
-          }
-          return pager;
-        };
-    }
-
-    std::shared_ptr<iroha::model::Query>
-    InteractiveQueryCli::parseGetAccountTransactions(QueryParams params) {
-      /// TODO 01/11/17 motxx - Make interactive-cli use named arguments.
-      auto ret =
-        parsePager(params[1], params[2]) | [this, &params](auto pager) {
-          return generator_.generateGetAccountTransactions(
-            local_time_, creator_, counter_, params[0], pager);
-        };
-      return ret.value_or(nullptr);
     }
 
     std::shared_ptr<iroha::model::Query>
