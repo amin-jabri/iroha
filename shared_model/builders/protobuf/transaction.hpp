@@ -26,13 +26,14 @@
 #include "amount/amount.hpp"
 #include "builders/protobuf/helpers.hpp"
 #include "interfaces/common_objects/types.hpp"
+#include "validators/default_validator.hpp"
 
 namespace shared_model {
   namespace proto {
-    template <int S = 0>
+    template <int S = 0, typename SV = validation::DefaultValidator>
     class TemplateTransactionBuilder {
      private:
-      template <int>
+      template <int, typename SVV>
       friend class TemplateTransactionBuilder;
 
       enum RequiredFields {
@@ -50,8 +51,12 @@ namespace shared_model {
 
      public:
       template <int Sp>
-      TemplateTransactionBuilder(const TemplateTransactionBuilder<Sp> &o)
-          : transaction_(o.transaction_) {}
+      TemplateTransactionBuilder(const TemplateTransactionBuilder<Sp> &o,
+                                 SV stateless_validator = SV())
+          : transaction_(o.transaction_),
+            stateless_validator_(stateless_validator) {}
+
+      SV stateless_validator_;
 
       TemplateTransactionBuilder() = default;
 
@@ -165,8 +170,14 @@ namespace shared_model {
 
       Transaction build() {
         static_assert(S == (1 << TOTAL) - 1, "Required fields are not set");
+        Transaction validate_tx(transaction_);
 
-        return Transaction(iroha::protocol::Transaction(transaction_));
+        auto answer = stateless_validator_.validate(
+            detail::make_polymorphic<Transaction>(transaction_));
+        if (answer.hasErrors()) {
+          throw std::invalid_argument(answer.reason());
+        }
+        return Transaction(transaction_);
       }
 
      private:
